@@ -8,24 +8,28 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io) server that p
 
 | Capability | Name | Description |
 |---|---|---|
-| 🔧 Tool | `encrypt_message` | Encrypts any plain-text message with a passphrase |
-| 🔧 Tool | `decrypt_message` | Decrypts a previously encrypted message with the same passphrase |
-| 📄 Resource | `encryption://info` | Returns details about the algorithm, key derivation, and output format |
-| 💬 Prompt | `encrypt_message_prompt` | Pre-built prompt that asks the agent to encrypt a message |
-| 💬 Prompt | `decrypt_message_prompt` | Pre-built prompt that asks the agent to decrypt a message |
+| 🔧 Tool | `list_customers` | Lista todos os clientes |
+| 🔧 Tool | `get_customer` | Busca um cliente por ID |
+| 🔧 Tool | `create_customer` | Cria um novo cliente |
+| 🔧 Tool | `update_customer` | Atualiza um cliente existente |
+| 🔧 Tool | `delete_customer` | Exclui um cliente |
+| 📄 Resource | `api-info` | Retorna informações sobre a API externa |
+| 💬 Prompt | `find_customer_prompt` | Prompt pronto para buscar um cliente |
 
-### How encryption works
+### How it works
 
-- **Algorithm**: AES-256-CBC
-- **Key derivation**: `scrypt(passphrase, fixedSalt, 32)` — you pass any passphrase string; the server derives a strong 32-byte key automatically
-- **Output format**: `<IV in hex>:<ciphertext in hex>` — keep the full string to decrypt later
-- **IV**: a fresh random 16-byte IV is generated on every encryption call, so the same message encrypted twice produces different output
+- **API externa**: Conecta-se a uma API REST em `http://localhost:9999/v1` para operações CRUD.
+- **Autenticação**: Usa `SERVICE_TOKEN` para autenticar na API externa.
+- **Ferramentas**: Cada operação CRUD é exposta como uma ferramenta MCP.
+- **Recursos**: `api-info` fornece metadados da API.
+- **Prompts**: `find_customer_prompt` é um prompt pré-construído para buscar clientes.
 
 ---
 
 ## Prerequisites
 
 - **Node.js v24+** (see `engines` in `package.json`)
+- **SERVICE_TOKEN** defined in environment (obtained from external API)
 
 ---
 
@@ -48,21 +52,27 @@ Create (or open) `.vscode/mcp.json` in your workspace and add:
 ```json
 {
   "servers": {
-    "ciphersuite-mcp": {
+    "customers-mcp": {
       "command": "node",
-      "args": ["--experimental-strip-types", "ABSOLUTE_PATH_TO_PROJECT/src/index.ts"]
+      "args": ["--experimental-strip-types", "ABSOLUTE_PATH_TO_PROJECT/src/index.ts"],
+      "env": {
+        "SERVICE_TOKEN": "YOUR_SERVICE_TOKEN_HERE"
+      }
     }
   }
 }
 ```
 
-or via npm
+or via npm (if published):
 ```json
 {
   "servers": {
-    "ciphersuite-mcp": {
+    "customers-mcp": {
       "command": "npx",
-      "args": ["-y", "@lucasgabriel/ciphersuite-mcp"]
+      "args": ["-y", "@lucasgabriel/ew-customers-mcp"],
+      "env": {
+        "SERVICE_TOKEN": "YOUR_SERVICE_TOKEN_HERE"
+      }
     }
   }
 }
@@ -79,15 +89,15 @@ Open the Command Palette (`Cmd+Shift+P`) and run **Developer: Reload Window** (o
 Open Copilot Chat (Agent mode) and try:
 
 ```
-Encrypt the message "Hello, World!" using the passphrase "my-secret-key"
+List all customers
 ```
 
 ```
-Decrypt this message: a3f1...:<ciphertext> using the passphrase "my-secret-key"
+Get customer with ID 123
 ```
 
 ```
-Show me the encryption://info resource
+Create a new customer with name "John Doe" and phone "123456789"
 ```
 
 The agent will automatically call the appropriate tool and return the result.
@@ -118,12 +128,14 @@ npm run test:dev
 
 The test suite covers:
 
-- Encrypting a message
-- Decrypting a message with the correct passphrase
-- Listing and reading the `encryption://info` resource
-- Fetching both prompts
-- Error: decrypting with the wrong passphrase
-- Error: decrypting a malformed ciphertext
+- Listing customers
+- Getting customer by ID
+- Creating customer
+- Updating customer
+- Deleting customer
+- Reading the `api-info` resource
+- Fetching the `find_customer_prompt` prompt
+- Errors: customer not found, etc.
 
 ---
 
@@ -131,10 +143,24 @@ The test suite covers:
 
 ```
 src/
-  index.ts   # Entry point — connects the server to stdio transport
-  mcp.ts     # All tools, resources, and prompts are registered here
+  index.ts          # Entry point — connects the server to stdio transport
+  application/
+    customer-service.ts  # Service to interact with external API
+  domain/
+    customer.ts      # Customer domain model
+    errors.ts        # Error definitions
+  infrastructure/
+    customer-http-client.ts  # HTTP client for the API
+  mcp/
+    server.ts        # Registration of tools, resources, and prompts
+    tools/           # MCP tools (list, get, create, etc.)
+    resources/       # MCP resources (api-info)
+    prompts/         # MCP prompts (findCustomer)
 tests/
-  mcp.test.ts
+  helpers.ts        # Test helpers
+  prompts/
+  resources/
+  tools/
 ```
 
 ---
@@ -148,3 +174,9 @@ tests/
 | `npm test` | Run all tests |
 | `npm run test:dev` | Run tests in watch mode |
 | `npm run mcp:inspect` | Open the MCP Inspector UI |
+
+---
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
